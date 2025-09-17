@@ -1,0 +1,40 @@
+[
+  {
+    "name": "custom_requests_total",
+    "metric_type": "counter",
+    "pattern": "increasing",
+    "base_value": 1000,
+    "amplitude": 100,
+    "frequency": 1.0,
+    "noise_level": 0.1,
+    "labels": {
+      "service": "web",
+      "environment": "production"
+    }
+  },
+  {
+    "name": "custom_cpu_usage",
+    "metric_type": "gauge",
+    "pattern": "sine_wave",
+    "base_value": 45,
+    "amplitude": 25,
+    "frequency": 0.1,
+    "noise_level": 0.05,
+    "labels": {
+      "host": "server01"
+    }
+  },
+  {
+    "name": "error_rate",
+    "metric_type": "gauge",
+    "pattern": "threshold_breach",
+    "base_value": 2.0,
+    "amplitude": 10.0,
+    "frequency": 1.0,
+    "noise_level": 0.2,
+    "labels": {
+      "service": "payment",
+      "severity": "critical"
+    }
+  }
+]

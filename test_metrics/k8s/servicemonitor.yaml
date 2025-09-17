@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: metrics-generator
+  namespace: test-metrics
+  labels:
+    app: metrics-generator
+    monitoring: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: metrics-generator
+      monitoring: prometheus
+  endpoints:
+  - port: http-metrics
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s
+    honorLabels: true
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: '(http_requests_total|http_errors_total|cpu_usage_percent|memory_usage_percent|queue_size|response_time_ms|db_.*)'
+      action: keep
+  namespaceSelector:
+    matchNames:
+    - default
