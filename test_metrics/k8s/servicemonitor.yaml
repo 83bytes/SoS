@@ -6,6 +6,7 @@ metadata:
   labels:
     app: metrics-generator
     monitoring: prometheus
+    release: prom-operator
 spec:
   selector:
     matchLabels:
