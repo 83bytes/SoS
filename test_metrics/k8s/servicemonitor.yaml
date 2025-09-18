@@ -20,8 +20,8 @@ spec:
     honorLabels: true
     metricRelabelings:
     - sourceLabels: [__name__]
-      regex: '(http_requests_total|http_errors_total|cpu_usage_percent|memory_usage_percent|queue_size|response_time_ms|db_.*)'
+      regex: '(test_metrics_.*)'
       action: keep
   namespaceSelector:
     matchNames:
-    - default
+    - test-metrics
