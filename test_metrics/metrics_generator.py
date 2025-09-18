@@ -184,6 +184,11 @@ def create_flask_app(generator: MetricsGenerator) -> Flask:
     """Create Flask application with metrics endpoints."""
     app = Flask(__name__)
 
+    # Enable logging
+    import logging
+    if not app.debug:
+        app.logger.setLevel(logging.INFO)
+
     @app.route('/metrics')
     def metrics():
         try:
@@ -191,6 +196,7 @@ def create_flask_app(generator: MetricsGenerator) -> Flask:
             output = generator.format_metrics_output(metrics_data)
             return Response(output, mimetype='text/plain; charset=utf-8')
         except Exception as e:
+            app.logger.error(f"Error generating metrics: {str(e)}", exc_info=True)
             return Response(f"Internal Server Error: {str(e)}", status=500)
 
     @app.route('/')
@@ -199,7 +205,8 @@ def create_flask_app(generator: MetricsGenerator) -> Flask:
         health_data = {
             "status": "healthy",
             "metrics_count": len(generator.configs),
-            "uptime_seconds": round(time.time() - generator.start_time, 2)
+            "uptime_seconds": round(time.time() - generator.start_time, 2),
+            "total_ticks": generator.step_count,
         }
         return jsonify(health_data)
 
@@ -217,7 +224,7 @@ def start_http_server(generator: MetricsGenerator, port: int, verbose: bool = Fa
         print("Press Ctrl+C to stop")
 
     try:
-        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+        app.run(host='0.0.0.0', port=port, debug=verbose, use_reloader=False)
     except KeyboardInterrupt:
         if verbose:
             print("\nKeyboard interrupt received, shutting down...")
@@ -241,11 +248,29 @@ def main():
     args = parser.parse_args()
 
     # Load configurations
-    if args.config:
-        with open(args.config, 'r') as f:
+    config_file = args.config or 'example_config.json'
+
+    try:
+        with open(config_file, 'r') as f:
             config_data = json.load(f)
-            configs = [MetricConfig(**cfg) for cfg in config_data]
-    else:
+            configs = []
+            for cfg in config_data:
+                # Convert string metric_type to enum
+                if isinstance(cfg.get('metric_type'), str):
+                    cfg['metric_type'] = MetricType(cfg['metric_type'])
+                # Validate that custom_function is specified
+                if not cfg.get('custom_function'):
+                    raise ValueError(f"Config for '{cfg.get('name')}' must specify a custom_function")
+                configs.append(MetricConfig(**cfg))
+        if args.verbose:
+            print(f"Loaded configuration from {config_file}")
+    except FileNotFoundError:
+        if args.verbose:
+            print(f"Config file {config_file} not found, using hardcoded defaults")
+        configs = create_default_configs()
+    except json.JSONDecodeError as e:
+        if args.verbose:
+            print(f"Error parsing {config_file}: {e}, using hardcoded defaults")
         configs = create_default_configs()
 
     generator = MetricsGenerator()

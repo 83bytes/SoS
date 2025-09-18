@@ -1,30 +1,14 @@
 [
   {
-    "name": "increase_steady_count",
-    "metric_type": "counter",
-    "pattern": "increasing",
-    "reset_interval": 10,
-    "noise_level": 0.0
-  },
-  {
-    "name": "counter_breach_threshold",
-    "metric_type": "counter",
-    "pattern": "threshold_breach",
-    "reset_interval": 10,
-    "noise_level": 0.0
-  },
-  {
-    "name": "gauge_sine",
+    "name": "custom_square",
     "metric_type": "gauge",
-    "pattern": "sine_wave",
-    "reset_interval": 00,
-    "noise_level": 0.0
+    "custom_function": "square",
+    "base_value": 0
   },
   {
-    "name": "counter_sawtooth",
-    "metric_type": "counter",
-    "pattern": "sawtooth",
-    "reset_interval": 10,
-    "noise_level": 0.0
+    "name": "custom_power",
+    "metric_type": "gauge",
+    "custom_function": "power",
+    "base_value": 0
   }
 ]
