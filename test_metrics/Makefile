@@ -54,10 +54,10 @@ push: build ## Push the container image to registry
 deploy: ## Deploy to Kubernetes
 	@echo "$(BLUE)Deploying to Kubernetes namespace $(NAMESPACE)...$(NC)"
 	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
-	kubectl apply -f k8s/configmap.yaml -n $(NAMESPACE)
+	kubectl create configmap metrics-generator-config --from-file=example_config.json -n $(NAMESPACE) --dry-run=client -o yaml | tee k8s/configmap.yaml | kubectl apply -f -
 	kubectl apply -f k8s/deployment.yaml -n $(NAMESPACE)
 	kubectl apply -f k8s/servicemonitor.yaml -n $(NAMESPACE)
-	@echo "$(GREEN)Deployment complete$(NC)"
+	@echo "$(GREEN)Deployment complete - using example_config.json$(NC)"
 
 undeploy: ## Remove from Kubernetes
 	@echo "$(YELLOW)Removing from Kubernetes...$(NC)"

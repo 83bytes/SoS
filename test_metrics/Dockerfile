@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY metrics_generator.py .
+COPY example_config.json .
 
 # Create necessary directories
 RUN mkdir -p /app/config && \
