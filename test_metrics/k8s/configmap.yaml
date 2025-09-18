@@ -1,50 +1,46 @@
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: metrics-generator-config
-  namespace: test-metrics
-  labels:
-    app: metrics-generator
 data:
-  custom_config.json: |
+  example_config.json: |-
     [
       {
-        "name": "api_requests_per_second",
+        "name": "counter_increase_steady",
+        "metric_type": "counter",
+        "pattern": "increasing",
+        "base_value": 100,
+        "amplitude": 5,
+        "frequency": 1.0,
+        "noise_level": 0.0
+      },
+      {
+        "name": "counter_breach_threshold",
+        "metric_type": "counter",
+        "pattern": "threshold_breach",
+        "base_value": 50,
+        "amplitude": 25,
+        "frequency": 1.0,
+        "noise_level": 0.0
+      },
+      {
+        "name": "gauge_sine",
         "metric_type": "gauge",
         "pattern": "sine_wave",
-        "base_value": 100.0,
-        "amplitude": 50.0,
-        "frequency": 0.05,
-        "noise_level": 0.1,
-        "labels": {
-          "service": "api-gateway",
-          "environment": "production"
-        }
+        "base_value": 50,
+        "amplitude": 30,
+        "frequency": 0.1,
+        "noise_level": 0.0
       },
       {
-        "name": "error_rate_percent",
-        "metric_type": "gauge",
-        "pattern": "threshold_breach",
-        "base_value": 1.0,
-        "amplitude": 5.0,
+        "name": "counter_sawtooth",
+        "metric_type": "counter",
+        "pattern": "sawtooth",
+        "base_value": 200,
+        "amplitude": 100,
         "frequency": 1.0,
-        "noise_level": 0.2,
-        "labels": {
-          "service": "payment",
-          "severity": "critical"
-        }
-      },
-      {
-        "name": "cache_hit_ratio",
-        "metric_type": "gauge",
-        "pattern": "random_walk",
-        "base_value": 85.0,
-        "amplitude": 15.0,
-        "frequency": 1.0,
-        "noise_level": 0.05,
-        "labels": {
-          "cache_type": "redis",
-          "cluster": "main"
-        }
+        "noise_level": 0.0
       }
     ]
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: metrics-generator-config
+  namespace: test-metrics

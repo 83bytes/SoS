@@ -32,6 +32,10 @@ spec:
         env:
         - name: PORT
           value: "8000"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/example_config.json
+          subPath: example_config.json
         resources:
           requests:
             memory: "64Mi"
@@ -64,6 +68,10 @@ spec:
           capabilities:
             drop:
             - ALL
+      volumes:
+      - name: config-volume
+        configMap:
+          name: metrics-generator-config
       securityContext:
         fsGroup: 1000
       restartPolicy: Always
