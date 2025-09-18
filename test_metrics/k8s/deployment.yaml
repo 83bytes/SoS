@@ -24,7 +24,7 @@ spec:
       containers:
       - name: test-metrics
         image: sohom83/test-metrics:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - name: http-metrics
           containerPort: 8000

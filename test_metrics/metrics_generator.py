@@ -151,32 +151,32 @@ class MetricsGenerator:
 
 
 def create_default_configs() -> List[MetricConfig]:
-    """Create a set of default metric configurations for testing."""
+    """Create a set of default metric configurations for testing - predictable values with no randomness."""
     return [
         # HTTP Request Metrics
-        MetricConfig("http_requests_total", MetricType.COUNTER, Pattern.INCREASING, 1000, 50, 0.5, 0.05,
+        MetricConfig("http_requests_total", MetricType.COUNTER, Pattern.STEADY, 1000, 0, 1.0, 0.0,
                     {"service": "api", "method": "GET"}),
-        MetricConfig("http_requests_total", MetricType.COUNTER, Pattern.SPIKY, 500, 100, 1.0, 0.1,
+        MetricConfig("http_requests_total", MetricType.COUNTER, Pattern.INCREASING, 500, 10, 1.0, 0.0,
                     {"service": "api", "method": "POST"}),
-        MetricConfig("http_errors_total", MetricType.COUNTER, Pattern.THRESHOLD_BREACH, 10, 20, 0.1, 0.2,
+        MetricConfig("http_errors_total", MetricType.COUNTER, Pattern.STEADY, 5, 0, 1.0, 0.0,
                     {"service": "api", "status": "500"}),
 
         # System Metrics
-        MetricConfig("cpu_usage_percent", MetricType.GAUGE, Pattern.SINE_WAVE, 50, 30, 0.1, 0.05),
-        MetricConfig("memory_usage_percent", MetricType.GAUGE, Pattern.RANDOM_WALK, 60, 20, 2.0, 0.1),
-        MetricConfig("disk_usage_percent", MetricType.GAUGE, Pattern.INCREASING, 70, 5, 0.01, 0.02),
+        MetricConfig("cpu_usage_percent", MetricType.GAUGE, Pattern.STEADY, 50, 0, 1.0, 0.0),
+        MetricConfig("memory_usage_percent", MetricType.GAUGE, Pattern.STEADY, 60, 0, 1.0, 0.0),
+        MetricConfig("disk_usage_percent", MetricType.GAUGE, Pattern.INCREASING, 70, 1, 0.1, 0.0),
 
         # Application Metrics
-        MetricConfig("queue_size", MetricType.GAUGE, Pattern.SPIKY, 100, 200, 1.0, 0.15,
+        MetricConfig("queue_size", MetricType.GAUGE, Pattern.STEADY, 100, 0, 1.0, 0.0,
                     {"queue": "processing"}),
-        MetricConfig("active_connections", MetricType.GAUGE, Pattern.SINE_WAVE, 500, 100, 0.05, 0.1),
-        MetricConfig("response_time_ms", MetricType.GAUGE, Pattern.THRESHOLD_BREACH, 100, 500, 1.0, 0.2,
+        MetricConfig("active_connections", MetricType.GAUGE, Pattern.STEADY, 500, 0, 1.0, 0.0),
+        MetricConfig("response_time_ms", MetricType.GAUGE, Pattern.STEADY, 100, 0, 1.0, 0.0,
                     {"endpoint": "/api/users"}),
 
         # Database Metrics
-        MetricConfig("db_connections_active", MetricType.GAUGE, Pattern.RANDOM_WALK, 20, 10, 1.0, 0.1),
-        MetricConfig("db_query_duration_ms", MetricType.GAUGE, Pattern.SPIKY, 50, 200, 1.0, 0.3),
-        MetricConfig("db_slow_queries_total", MetricType.COUNTER, Pattern.THRESHOLD_BREACH, 5, 10, 0.05, 0.1),
+        MetricConfig("db_connections_active", MetricType.GAUGE, Pattern.STEADY, 20, 0, 1.0, 0.0),
+        MetricConfig("db_query_duration_ms", MetricType.GAUGE, Pattern.STEADY, 50, 0, 1.0, 0.0),
+        MetricConfig("db_slow_queries_total", MetricType.COUNTER, Pattern.STEADY, 2, 0, 1.0, 0.0),
     ]
 
 
