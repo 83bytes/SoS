@@ -2,13 +2,11 @@
   {
     "name": "custom_square",
     "metric_type": "gauge",
-    "custom_function": "square",
-    "base_value": 0
+    "custom_function": "square"
   },
   {
     "name": "custom_power",
     "metric_type": "gauge",
-    "custom_function": "power",
-    "base_value": 0
+    "custom_function": "power"
   }
 ]

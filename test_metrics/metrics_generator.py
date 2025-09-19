@@ -6,6 +6,8 @@ Generates various types of metrics (counters and gauges) with configurable patte
 to test different alert combinations and scenarios.
 """
 
+import os
+import sys
 import time
 import random
 import math
@@ -15,11 +17,37 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
-from flask import Flask, Response, jsonify
-from urllib.parse import urlparse
-import threading
-import signal
-import sys
+from flask import Flask, Response, jsonify, request
+from abc import ABC, abstractmethod
+import csv
+import io
+from typing import Generator, Callable
+
+
+# Custom Function Registry
+CUSTOM_FUNCTIONS = {}
+
+def register_custom_function(name: str, func: Callable) -> None:
+    """Register a custom function for use in metric generation."""
+    CUSTOM_FUNCTIONS[name] = func
+
+def square_function(config: 'MetricConfig') -> Generator[float, None, None]:
+    """Example custom function: yields i*i for i in range."""
+    i = 1
+    while True:
+        yield float(i * i)
+        i += 1
+
+def power_function(config: 'MetricConfig') -> Generator[float, None, None]:
+    """Example custom function: yields i**i for i in range."""
+    i = 1
+    while True:
+        yield float(i ** i)
+        i += 1
+
+# Register example functions
+register_custom_function("square", square_function)
+register_custom_function("power", power_function)
 
 
 class MetricType(Enum):
@@ -27,88 +55,76 @@ class MetricType(Enum):
     GAUGE = "gauge"
 
 
-class Pattern(Enum):
-    STEADY = "steady"
-    INCREASING = "increasing"
-    DECREASING = "decreasing"
-    SPIKY = "spiky"
-    SINE_WAVE = "sine_wave"
-    RANDOM_WALK = "random_walk"
-    THRESHOLD_BREACH = "threshold_breach"
-
 
 @dataclass
 class MetricConfig:
     name: str
     metric_type: MetricType
-    pattern: Pattern
-    base_value: float
-    amplitude: float = 10.0
-    frequency: float = 1.0
-    noise_level: float = 0.1
+    custom_function: str
+    reset_interval: int = 1
     labels: Optional[Dict[str, str]] = None
 
+
+class PatternIterator(ABC):
+    """Base class for pattern iterators that generate metric values."""
+
+    def __init__(self, config: MetricConfig, start_time: float):
+        self.config = config
+        self.start_time = start_time
+        self.state = {}
+        self.tick_count = 0
+
+    @abstractmethod
+    def __next__(self) -> float:
+        """Generate the next value in the pattern."""
+        pass
+
+    def __iter__(self):
+        return self
+
+
+class CustomFunctionIterator(PatternIterator):
+    """Iterator that uses custom registered functions to generate values."""
+
+    def __init__(self, config: 'MetricConfig', start_time: float):
+        super().__init__(config, start_time)
+        function_name = getattr(config, 'custom_function', None)
+        if function_name and function_name in CUSTOM_FUNCTIONS:
+            self.generator = CUSTOM_FUNCTIONS[function_name](config)
+        else:
+            raise ValueError(f"Custom function '{function_name}' not found in registry")
+
+    def __next__(self) -> float:
+        self.tick_count += 1
+        try:
+            value = next(self.generator)
+            return value
+        except StopIteration:
+            # something triggered the exit. lets exit
+            sys.exit(0)
 
 class MetricsGenerator:
     def __init__(self):
         self.start_time = time.time()
         self.step_count = 0
-        self.metrics_state = {}
         self.configs = []
+        self.iterators = {}
         self.output_format = "prometheus"
 
+    def _initialize_iterators(self):
+        """Initialize iterators for all configured metrics."""
+        self.iterators = {}
+        for config in self.configs:
+            # Use custom function iterator
+            self.iterators[config.name] = CustomFunctionIterator(config, self.start_time)
+
     def generate_value(self, config: MetricConfig) -> float:
-        """Generate a metric value based on the configuration pattern."""
-        current_time = time.time() - self.start_time
+        """Generate a metric value using the iterator-based approach."""
+        
+        # Get next value from iterator
+        value = next(self.iterators[config.name])
 
-        if config.pattern == Pattern.STEADY:
-            value = config.base_value
-
-        elif config.pattern == Pattern.INCREASING:
-            value = config.base_value + (current_time * config.frequency)
-
-        elif config.pattern == Pattern.DECREASING:
-            value = config.base_value - (current_time * config.frequency)
-
-        elif config.pattern == Pattern.SPIKY:
-            if random.random() < 0.1:  # 10% chance of spike
-                value = config.base_value + config.amplitude * random.uniform(2, 5)
-            else:
-                value = config.base_value
-
-        elif config.pattern == Pattern.SINE_WAVE:
-            value = config.base_value + config.amplitude * math.sin(current_time * config.frequency)
-
-        elif config.pattern == Pattern.RANDOM_WALK:
-            if config.name not in self.metrics_state:
-                self.metrics_state[config.name] = config.base_value
-
-            change = random.uniform(-config.frequency, config.frequency)
-            self.metrics_state[config.name] += change
-            value = self.metrics_state[config.name]
-
-        elif config.pattern == Pattern.THRESHOLD_BREACH:
-            # Periodically breach a threshold
-            cycle_time = current_time % 60  # 60 second cycle
-            if 20 <= cycle_time <= 30:  # Breach for 10 seconds every minute
-                value = config.base_value + config.amplitude * 2
-            else:
-                value = config.base_value
-
-        # Add noise
-        noise = random.uniform(-config.noise_level, config.noise_level) * config.amplitude
-        value += noise
-
-        # For counters, ensure monotonic increase
-        if config.metric_type == MetricType.COUNTER:
-            if config.name not in self.metrics_state:
-                self.metrics_state[config.name] = max(0, value)
-            else:
-                # Counters should only increase
-                value = max(self.metrics_state[config.name], self.metrics_state[config.name] + abs(value - config.base_value) * 0.1)
-                self.metrics_state[config.name] = value
-
-        return max(0, value)  # Ensure non-negative values
+        return value
 
     def generate_metrics(self, configs: List[MetricConfig]) -> List[Dict[str, Any]]:
         """Generate metrics for all configurations."""
@@ -119,7 +135,7 @@ class MetricsGenerator:
             value = self.generate_value(config)
 
             metric = {
-                "name": config.name,
+                "name": f"test_metrics_{config.name}",
                 "type": config.metric_type.value,
                 "value": round(value, 2),
                 "timestamp": timestamp,
@@ -133,6 +149,7 @@ class MetricsGenerator:
     def set_configs(self, configs: List[MetricConfig]):
         """Set the metric configurations."""
         self.configs = configs
+        self._initialize_iterators()
 
     def set_output_format(self, output_format: str):
         """Set the output format."""
@@ -151,32 +168,18 @@ class MetricsGenerator:
 
 
 def create_default_configs() -> List[MetricConfig]:
-    """Create a set of default metric configurations for testing - predictable values with no randomness."""
+    """Create a set of default metric configurations for testing."""
     return [
-        # HTTP Request Metrics
-        MetricConfig("test_metrics_http_requests_total", MetricType.COUNTER, Pattern.STEADY, 1000, 0, 1.0, 0.0,
-                    {"service": "api", "method": "GET"}),
-        MetricConfig("test_metrics_http_requests_total", MetricType.COUNTER, Pattern.INCREASING, 500, 10, 1.0, 0.0,
-                    {"service": "api", "method": "POST"}),
-        MetricConfig("test_metrics_http_errors_total", MetricType.COUNTER, Pattern.STEADY, 5, 0, 1.0, 0.0,
-                    {"service": "api", "status": "500"}),
-
-        # System Metrics
-        MetricConfig("test_metrics_cpu_usage_percent", MetricType.GAUGE, Pattern.STEADY, 50, 0, 1.0, 0.0),
-        MetricConfig("test_metrics_memory_usage_percent", MetricType.GAUGE, Pattern.STEADY, 60, 0, 1.0, 0.0),
-        MetricConfig("test_metrics_disk_usage_percent", MetricType.GAUGE, Pattern.INCREASING, 70, 1, 0.1, 0.0),
-
-        # Application Metrics
-        MetricConfig("test_metrics_queue_size", MetricType.GAUGE, Pattern.STEADY, 100, 0, 1.0, 0.0,
-                    {"queue": "processing"}),
-        MetricConfig("test_metrics_active_connections", MetricType.GAUGE, Pattern.STEADY, 500, 0, 1.0, 0.0),
-        MetricConfig("test_metrics_response_time_ms", MetricType.GAUGE, Pattern.STEADY, 100, 0, 1.0, 0.0,
-                    {"endpoint": "/api/users"}),
-
-        # Database Metrics
-        MetricConfig("test_metrics_db_connections_active", MetricType.GAUGE, Pattern.STEADY, 20, 0, 1.0, 0.0),
-        MetricConfig("test_metrics_db_query_duration_ms", MetricType.GAUGE, Pattern.STEADY, 50, 0, 1.0, 0.0),
-        MetricConfig("test_metrics_db_slow_queries_total", MetricType.COUNTER, Pattern.STEADY, 2, 0, 1.0, 0.0),
+        MetricConfig(
+            name="custom_square",
+            metric_type=MetricType.GAUGE,
+            custom_function="square",
+        ),
+        MetricConfig(
+            name="custom_power",
+            metric_type=MetricType.GAUGE,
+            custom_function="power",
+        ),
     ]
 
 
