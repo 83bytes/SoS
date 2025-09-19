@@ -11,6 +11,7 @@ import sys
 import time
 import json
 import argparse
+import random
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
@@ -41,9 +42,21 @@ def power_function(config: 'MetricConfig') -> Generator[float, None, None]:
         yield float(i ** i)
         i += 1
 
+def normal_function(config: 'MetricConfig') -> Generator[float, None, None]:
+    """Normal distribution function: yields values from Gaussian distribution."""
+    # Default parameters: mean=50, std=10
+    mean = 50.0
+    std_dev = 10.0
+
+    while True:
+        value = random.normalvariate(mean, std_dev)
+        # Ensure non-negative values for metrics
+        yield max(0.0, value)
+
 # Register example functions
 register_custom_function("square", square_function)
 register_custom_function("power", power_function)
+register_custom_function("normal", normal_function)
 
 
 class MetricType(Enum):
@@ -68,7 +81,6 @@ class PatternIterator(ABC):
         self.config = config
         self.start_time = start_time
         self.state = {}
-        self.tick_count = 0
 
     @abstractmethod
     def __next__(self) -> float:
@@ -89,6 +101,7 @@ class CustomFunctionIterator(PatternIterator):
             self.generator = CUSTOM_FUNCTIONS[function_name](config)
         else:
             raise ValueError(f"Custom function '{function_name}' not found in registry")
+        self.tick_count = 0
 
     def __next__(self) -> float:
         self.tick_count += 1
@@ -110,10 +123,11 @@ class CustomFunctionIterator(PatternIterator):
 class MetricsGenerator:
     def __init__(self):
         self.start_time = time.time()
-        self.step_count = 0
         self.configs = []
         self.iterators = {}
         self.output_format = "prometheus"
+        self.last_generation_time = 0
+        self.last_metrics = []
 
     def _initialize_iterators(self):
         """Initialize iterators for all configured metrics."""
@@ -132,6 +146,10 @@ class MetricsGenerator:
 
     def generate_metrics(self, configs: List[MetricConfig]) -> List[Dict[str, Any]]:
         """Generate metrics for all configurations."""
+        current_time = time.time()
+        if current_time - self.last_generation_time < 60:
+            return self.last_metrics
+
         timestamp = datetime.now().isoformat()
         metrics = []
 
@@ -147,7 +165,8 @@ class MetricsGenerator:
             }
             metrics.append(metric)
 
-        self.step_count += 1
+        self.last_generation_time = current_time
+        self.last_metrics = metrics
         return metrics
 
     def set_configs(self, configs: List[MetricConfig]):
@@ -171,20 +190,6 @@ class MetricsGenerator:
         return "\n".join(output_lines)
 
 
-def create_default_configs() -> List[MetricConfig]:
-    """Create a set of default metric configurations for testing."""
-    return [
-        MetricConfig(
-            name="custom_square",
-            metric_type=MetricType.GAUGE,
-            custom_function="square",
-        ),
-        MetricConfig(
-            name="custom_power",
-            metric_type=MetricType.GAUGE,
-            custom_function="power",
-        ),
-    ]
 
 
 def create_flask_app(generator: MetricsGenerator) -> Flask:
@@ -201,6 +206,7 @@ def create_flask_app(generator: MetricsGenerator) -> Flask:
         try:
             metrics_data = generator.generate_metrics(generator.configs)
             output = generator.format_metrics_output(metrics_data)
+            app.logger.info(f"Generated metrics:\n{output}")
             return Response(output, mimetype='text/plain; charset=utf-8')
         except Exception as e:
             app.logger.error(f"Error generating metrics: {str(e)}", exc_info=True)
@@ -213,7 +219,6 @@ def create_flask_app(generator: MetricsGenerator) -> Flask:
             "status": "healthy",
             "metrics_count": len(generator.configs),
             "uptime_seconds": round(time.time() - generator.start_time, 2),
-            "total_ticks": generator.step_count,
         }
         return jsonify(health_data)
 
@@ -272,13 +277,11 @@ def main():
         if args.verbose:
             print(f"Loaded configuration from {config_file}")
     except FileNotFoundError:
-        if args.verbose:
-            print(f"Config file {config_file} not found, using hardcoded defaults")
-        configs = create_default_configs()
+        print(f"Error: Config file {config_file} not found")
+        sys.exit(1)
     except json.JSONDecodeError as e:
-        if args.verbose:
-            print(f"Error parsing {config_file}: {e}, using hardcoded defaults")
-        configs = create_default_configs()
+        print(f"Error: Invalid JSON in {config_file}: {e}")
+        sys.exit(1)
 
     generator = MetricsGenerator()
     generator.set_configs(configs)

@@ -1,42 +1,24 @@
 apiVersion: v1
 data:
-  example_config.json: |-
+  example_config.json: |
     [
       {
-        "name": "counter_increase_steady",
-        "metric_type": "counter",
-        "pattern": "increasing",
-        "base_value": 100,
-        "amplitude": 5,
-        "frequency": 1.0,
-        "noise_level": 0.0
-      },
-      {
-        "name": "counter_breach_threshold",
-        "metric_type": "counter",
-        "pattern": "threshold_breach",
-        "base_value": 50,
-        "amplitude": 25,
-        "frequency": 1.0,
-        "noise_level": 0.0
-      },
-      {
-        "name": "gauge_sine",
+        "name": "custom_square",
         "metric_type": "gauge",
-        "pattern": "sine_wave",
-        "base_value": 50,
-        "amplitude": 30,
-        "frequency": 0.1,
-        "noise_level": 0.0
+        "custom_function": "square",
+        "reset_interval": 10
       },
       {
-        "name": "counter_sawtooth",
-        "metric_type": "counter",
-        "pattern": "sawtooth",
-        "base_value": 200,
-        "amplitude": 100,
-        "frequency": 1.0,
-        "noise_level": 0.0
+        "name": "custom_power",
+        "metric_type": "gauge",
+        "custom_function": "power",
+        "reset_interval": 10
+      },
+      {
+        "name": "custom_normal",
+        "metric_type": "gauge",
+        "custom_function": "normal",
+        "reset_interval": 10
       }
     ]
 kind: ConfigMap

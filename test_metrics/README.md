@@ -7,8 +7,7 @@ A Python-based metrics generator that creates custom metric patterns using user-
 This system allows you to:
 - Define custom mathematical functions as Python generators
 - Reference functions by name in JSON configuration
-- Generate metrics on each `/metrics` endpoint hit (tick-based)
-- Export historical data to CSV with tick filtering
+- Generate metrics at a one-minute interval
 - Deploy via Docker/Podman and Kubernetes
 
 ## Architecture
@@ -18,7 +17,6 @@ This system allows you to:
 - **Custom Function Registry**: Maps function names to Python generators
 - **MetricConfig**: Configuration specifying function name and metric properties
 - **CustomFunctionIterator**: Wraps generators to integrate with metrics system
-- **Tick-based Generation**: Each `/metrics` call increments tick counter and generates next values
 
 ### Example Functions
 
@@ -84,7 +82,7 @@ python3 metrics_generator.py --config your_config.json --port 8000 --verbose
 ### API Endpoints
 
 #### `/metrics` - Generate Metrics
-Returns current metric values in Prometheus format. Each call increments the tick counter.
+Returns current metric values in Prometheus format. New values are generated every minute.
 
 ```bash
 curl http://localhost:8000/metrics
@@ -100,26 +98,6 @@ After second call:
 ```
 test_metrics_custom_square 4
 test_metrics_custom_power 4
-```
-
-#### `/csv` - Export Historical Data
-Export all historical metric data as CSV.
-
-```bash
-# Get all data
-curl http://localhost:8000/csv
-
-# Get only first 10 ticks
-curl http://localhost:8000/csv?max_ticks=10
-```
-
-CSV format:
-```csv
-tick,timestamp,metric_name,value,type
-0,2024-01-01T10:00:00,test_metrics_custom_square,1.0,gauge
-0,2024-01-01T10:00:00,test_metrics_custom_power,1.0,gauge
-1,2024-01-01T10:01:00,test_metrics_custom_square,4.0,gauge
-1,2024-01-01T10:01:00,test_metrics_custom_power,4.0,gauge
 ```
 
 #### `/health` - Health Check
@@ -206,23 +184,6 @@ make port-forward
 # Clean up
 make undeploy
 ```
-
-## Understanding Ticks
-
-- **Tick**: Each call to `/metrics` endpoint increments the tick counter
-- **Values**: Custom functions generate the next value in their sequence on each tick
-- **History**: All generated values are stored with their tick number for CSV export
-- **Filtering**: Use `max_ticks` parameter to limit CSV export to first N ticks
-
-### Example Tick Progression
-
-| Tick | square function (i*i) | power function (i**i) |
-|------|----------------------|----------------------|
-| 0    | 1                    | 1                    |
-| 1    | 4                    | 4                    |
-| 2    | 9                    | 27                   |
-| 3    | 16                   | 256                  |
-| 4    | 25                   | 3125                 |
 
 ## Development
 
