@@ -1,291 +1,304 @@
-# Metrics Generator for Alert Testing
+# Custom Metrics Generator
 
-A Python-based HTTP server that generates synthetic metrics with configurable patterns to test different alert combinations and monitoring scenarios. Perfect for testing Prometheus alerting rules, Grafana dashboards, and monitoring system configurations.
+A Python-based metrics generator that creates custom metric patterns using user-defined iterator functions. Generate mathematical sequences like i*i, i**i, or any custom function and expose them as Prometheus metrics.
 
-## Features
+## Overview
 
-- **HTTP Metrics Endpoint**: Serves Prometheus-format metrics at `/metrics`
-- **On-Demand Generation**: Metrics generated fresh on each scrape request
-- **Multiple Patterns**: 7 different metric behavior patterns (steady, increasing, spiky, etc.)
-- **Realistic Metrics**: Pre-configured with common application and system metrics
-- **Custom Configuration**: JSON-based configuration for custom metrics
-- **Kubernetes Ready**: Includes deployment manifests and ServiceMonitor
+This system allows you to:
+- Define custom mathematical functions as Python generators
+- Reference functions by name in JSON configuration
+- Generate metrics on each `/metrics` endpoint hit (tick-based)
+- Export historical data to CSV with tick filtering
+- Deploy via Docker/Podman and Kubernetes
 
-## Quick Start
+## Architecture
 
-### Local Development
+### Core Components
 
-```bash
-# Start the metrics server
-python3 metrics_generator.py --port 8000 --verbose
+- **Custom Function Registry**: Maps function names to Python generators
+- **MetricConfig**: Configuration specifying function name and metric properties
+- **CustomFunctionIterator**: Wraps generators to integrate with metrics system
+- **Tick-based Generation**: Each `/metrics` call increments tick counter and generates next values
 
-# Scrape metrics
-curl http://localhost:8000/metrics
+### Example Functions
 
-# Check health
-curl http://localhost:8000/health
+```python
+def square_function(config: MetricConfig) -> Generator[float, None, None]:
+    """yields i*i: 1, 4, 9, 16, 25..."""
+    i = 1
+    while True:
+        yield float(i * i)
+        i += 1
+
+def power_function(config: MetricConfig) -> Generator[float, None, None]:
+    """yields i**i: 1, 4, 27, 256..."""
+    i = 1
+    while True:
+        yield float(i ** i)
+        i += 1
 ```
-
-### With Custom Configuration
-
-```bash
-# Using custom metrics configuration
-python3 metrics_generator.py --config example_config.json --port 8080
-```
-
-## Metric Patterns
-
-The generator supports 7 different patterns to simulate various system behaviors:
-
-| Pattern | Description | Use Case |
-|---------|-------------|----------|
-| `steady` | Constant value with minor noise | Baseline metrics, stable systems |
-| `increasing` | Linear growth over time | Growing load, memory leaks |
-| `decreasing` | Linear decline over time | Decreasing capacity, cleanup processes |
-| `spiky` | Random spikes with 10% probability | Intermittent errors, traffic bursts |
-| `sine_wave` | Sinusoidal oscillation | Cyclical patterns, daily/weekly trends |
-| `random_walk` | Random walk with drift | Unpredictable but bounded metrics |
-| `threshold_breach` | Periodic threshold violations | Testing alert thresholds |
-
-## Default Metrics
-
-The generator comes with 12 pre-configured metrics:
-
-### HTTP Metrics
-- `http_requests_total{service="api",method="GET"}` - Increasing counter
-- `http_requests_total{service="api",method="POST"}` - Spiky counter
-- `http_errors_total{service="api",status="500"}` - Threshold breach counter
-
-### System Metrics
-- `cpu_usage_percent` - Sine wave gauge (0-100%)
-- `memory_usage_percent` - Random walk gauge
-- `disk_usage_percent` - Slowly increasing gauge
-
-### Application Metrics
-- `queue_size{queue="processing"}` - Spiky gauge
-- `active_connections` - Sine wave gauge
-- `response_time_ms{endpoint="/api/users"}` - Threshold breach gauge
-
-### Database Metrics
-- `db_connections_active` - Random walk gauge
-- `db_query_duration_ms` - Spiky gauge
-- `db_slow_queries_total` - Threshold breach counter
 
 ## Configuration
 
-### Custom Metrics Configuration
-
-Create a JSON file with custom metric configurations:
+### JSON Configuration Format
 
 ```json
 [
   {
-    "name": "custom_metric",
+    "name": "custom_square",
     "metric_type": "gauge",
-    "pattern": "sine_wave",
-    "base_value": 50.0,
-    "amplitude": 20.0,
-    "frequency": 0.1,
-    "noise_level": 0.05,
-    "labels": {
-      "service": "custom",
-      "environment": "test"
-    }
+    "custom_function": "square"
+  },
+  {
+    "name": "custom_power",
+    "metric_type": "gauge",
+    "custom_function": "power"
   }
 ]
 ```
 
-### Configuration Parameters
+### Required Fields
+- `name`: Metric identifier
+- `metric_type`: "gauge" or "counter"
+- `custom_function`: Name of registered function
 
-- `name`: Metric name (string)
-- `metric_type`: "counter" or "gauge"
-- `pattern`: One of the 7 supported patterns
-- `base_value`: Base/starting value (float)
-- `amplitude`: Pattern amplitude/range (float)
-- `frequency`: Pattern frequency/speed (float)
-- `noise_level`: Random noise level (0.0-1.0)
-- `labels`: Optional metric labels (dict)
+### Optional Fields
+- `reset_interval`: Reset interval (default: 1)
+- `labels`: Dictionary of Prometheus labels
 
-## Command Line Options
+## Usage
 
+### Running Locally
+
+```bash
+# Install dependencies
+make install
+
+# Run with example config
+make run-config
+
+# Run with custom config
+python3 metrics_generator.py --config your_config.json --port 8000 --verbose
 ```
-python3 metrics_generator.py [OPTIONS]
 
-Options:
-  --port, -p PORT        Port for HTTP server (default: 8000)
-  --config, -c FILE      JSON file with custom metric configurations
-  --verbose, -v          Verbose output
-  --help, -h             Show help message
+### API Endpoints
+
+#### `/metrics` - Generate Metrics
+Returns current metric values in Prometheus format. Each call increments the tick counter.
+
+```bash
+curl http://localhost:8000/metrics
+```
+
+Example output:
+```
+test_metrics_custom_square 1
+test_metrics_custom_power 1
+```
+
+After second call:
+```
+test_metrics_custom_square 4
+test_metrics_custom_power 4
+```
+
+#### `/csv` - Export Historical Data
+Export all historical metric data as CSV.
+
+```bash
+# Get all data
+curl http://localhost:8000/csv
+
+# Get only first 10 ticks
+curl http://localhost:8000/csv?max_ticks=10
+```
+
+CSV format:
+```csv
+tick,timestamp,metric_name,value,type
+0,2024-01-01T10:00:00,test_metrics_custom_square,1.0,gauge
+0,2024-01-01T10:00:00,test_metrics_custom_power,1.0,gauge
+1,2024-01-01T10:01:00,test_metrics_custom_square,4.0,gauge
+1,2024-01-01T10:01:00,test_metrics_custom_power,4.0,gauge
+```
+
+#### `/health` - Health Check
+Returns service status and statistics.
+
+```bash
+curl http://localhost:8000/health
+```
+
+## Adding Custom Functions
+
+### 1. Define Your Function
+
+```python
+def fibonacci_function(config: MetricConfig) -> Generator[float, None, None]:
+    """Fibonacci sequence: 1, 1, 2, 3, 5, 8, 13..."""
+    a, b = 1, 1
+    while True:
+        yield float(a)
+        a, b = b, a + b
+
+def exponential_function(config: MetricConfig) -> Generator[float, None, None]:
+    """2^i: 2, 4, 8, 16, 32..."""
+    i = 1
+    while True:
+        yield float(2 ** i)
+        i += 1
+```
+
+### 2. Register Your Function
+
+```python
+register_custom_function("fibonacci", fibonacci_function)
+register_custom_function("exponential", exponential_function)
+```
+
+### 3. Use in Configuration
+
+```json
+{
+  "name": "my_fibonacci",
+  "metric_type": "gauge",
+  "custom_function": "fibonacci"
+}
+```
+
+## Docker/Podman Deployment
+
+### Build and Run
+
+```bash
+# Build image
+make build
+
+# Run container
+podman run -p 8000:8000 test-metrics:latest
+
+# Push to registry
+make push
+```
+
+### Custom Configuration
+
+```bash
+# Run with custom config file
+podman run -p 8000:8000 -v /path/to/config.json:/app/config.json test-metrics:latest --config config.json
 ```
 
 ## Kubernetes Deployment
 
-### Deploy with Kubectl
-This deploys the application, the config-map and the servicemonitor 
-
 ```bash
-# Deploy the metrics generator
-kubectl apply -f k8s/
+# Deploy to cluster
+make deploy
+
+# Check status
+make status
+
+# View logs
+make logs
 
 # Port forward for local access
-kubectl port-forward deployment/metrics-generator 8000:8000
+make port-forward
 
-# Test metrics endpoint
-curl http://localhost:8000/metrics
+# Clean up
+make undeploy
 ```
 
-### Prometheus Integration
+## Understanding Ticks
 
-The deployment includes a ServiceMonitor for automatic Prometheus discovery:
+- **Tick**: Each call to `/metrics` endpoint increments the tick counter
+- **Values**: Custom functions generate the next value in their sequence on each tick
+- **History**: All generated values are stored with their tick number for CSV export
+- **Filtering**: Use `max_ticks` parameter to limit CSV export to first N ticks
 
-```bash
-# Apply the ServiceMonitor (requires Prometheus Operator)
-kubectl apply -f k8s/servicemonitor.yaml
-```
+### Example Tick Progression
 
-## Docker
-
-### Build Image
-
-```bash
-# Build the container image
-podman build -t metrics-generator .
-
-# Run locally
-podman run -p 8000:8000 metrics-generator
-```
-
-### Environment Variables
-
-- `PORT`: Server port (default: 8000)
-- `CONFIG_FILE`: Path to custom configuration file
-
-## Monitoring Integration
-
-### Prometheus Configuration
-
-Add to your `prometheus.yml`:
-
-```yaml
-scrape_configs:
-  - job_name: 'metrics-generator'
-    static_configs:
-      - targets: ['localhost:8000']
-    scrape_interval: 15s
-```
-
-### Grafana Dashboard
-
-Import the provided Grafana dashboard (`grafana-dashboard.json`) to visualize the generated metrics.
-
-### Example Alert Rules
-
-```yaml
-groups:
-  - name: metrics-generator-alerts
-    rules:
-      - alert: HighErrorRate
-        expr: rate(http_errors_total[5m]) > 0.1
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High error rate detected"
-
-      - alert: HighCPUUsage
-        expr: cpu_usage_percent > 80
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "CPU usage above 80%"
-```
-
-## Use Cases
-
-### Alert Testing
-- Test alert thresholds and timing
-- Validate alert routing and notifications
-- Simulate incident scenarios
-
-### Dashboard Development
-- Create and test Grafana dashboards
-- Validate metric visualizations
-- Test different time ranges and aggregations
-
-### Load Testing
-- Generate predictable metric patterns
-- Test monitoring system performance
-- Validate metric ingestion rates
-
-### Training and Demos
-- Demonstrate monitoring concepts
-- Train teams on alert management
-- Show metric pattern recognition
+| Tick | square function (i*i) | power function (i**i) |
+|------|----------------------|----------------------|
+| 0    | 1                    | 1                    |
+| 1    | 4                    | 4                    |
+| 2    | 9                    | 27                   |
+| 3    | 16                   | 256                  |
+| 4    | 25                   | 3125                 |
 
 ## Development
 
-### Requirements
-- Python 3.7+
-- No external dependencies (uses only standard library)
+### Project Structure
+
+```
+├── metrics_generator.py    # Main application
+├── example_config.json    # Example configuration
+├── GAMEPLAN.md           # Development plan
+├── Dockerfile            # Container build
+├── Makefile             # Build commands
+└── k8s/                 # Kubernetes manifests
+```
 
 ### Testing
+
 ```bash
-# Run basic functionality test
-python3 -c "
-import requests
-import time
-import subprocess
+# Syntax check
+make lint
 
-# Start server in background
-proc = subprocess.Popen(['python3', 'metrics_generator.py', '--port', '9999'])
-time.sleep(2)
+# Run tests
+make test
 
-# Test endpoints
-print('Testing /metrics:', requests.get('http://localhost:9999/metrics').status_code)
-print('Testing /health:', requests.get('http://localhost:9999/health').status_code)
+# Check health
+make health
 
-# Cleanup
-proc.terminate()
-"
+# Fetch current metrics
+make metrics
 ```
+
+## Design Philosophy
+
+### Why Iterator Wrapper Pattern?
+
+The system uses a two-level design:
+1. **Custom Functions**: Pure generators defining mathematical sequences
+2. **CustomFunctionIterator**: Wrapper handling integration with metrics system
+
+This provides:
+- **Separation of Concerns**: Math logic separate from metrics infrastructure
+- **Flexibility**: Easy to add transformations, error handling, state management
+- **Extensibility**: Framework for future features without changing core functions
+- **Consistency**: All iterators implement the same interface
+
+### Benefits
+
+- **Pure Functions**: Mathematical generators are simple and testable
+- **Composability**: Easy to combine and extend functions
+- **Predictable**: Tick-based generation ensures reproducible sequences
+- **Observable**: Full history tracking for analysis and debugging
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Port already in use**
-   ```bash
-   python3 metrics_generator.py --port 8001
-   ```
+1. **Function Not Found**: Ensure custom function is registered in `CUSTOM_FUNCTIONS`
+2. **Config Validation**: All configs must specify `custom_function` field
+3. **Port Conflicts**: Change port with `--port` or in Makefile
+4. **Container Issues**: Check logs with `make logs` or `podman logs`
 
-2. **Custom config not loading**
-   ```bash
-   # Check JSON syntax
-   python3 -m json.tool example_config.json
-   ```
-
-3. **Metrics not changing**
-   - Each request to `/metrics` generates new values
-   - Some patterns (like `steady`) have minimal variation
-
-### Health Check
+### Debugging
 
 ```bash
-# Check if server is running
-curl http://localhost:8000/health
+# Verbose output
+python3 metrics_generator.py --verbose
 
-# Expected response:
-# {"status": "healthy", "metrics_count": 12, "uptime_seconds": 45.2}
+# Check registered functions
+python3 -c "from metrics_generator import CUSTOM_FUNCTIONS; print(list(CUSTOM_FUNCTIONS.keys()))"
+
+# Validate config
+python3 -c "import json; print(json.load(open('example_config.json')))"
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
+1. Add new functions to the registry
+2. Update example configurations
 3. Add tests for new functionality
-4. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details.
+4. Update documentation

@@ -6,21 +6,17 @@ Generates various types of metrics (counters and gauges) with configurable patte
 to test different alert combinations and scenarios.
 """
 
-import os
+
 import sys
 import time
-import random
-import math
 import json
 import argparse
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify
 from abc import ABC, abstractmethod
-import csv
-import io
 from typing import Generator, Callable
 
 
@@ -61,7 +57,7 @@ class MetricConfig:
     name: str
     metric_type: MetricType
     custom_function: str
-    reset_interval: int = 1
+    reset_interval: int = 0
     labels: Optional[Dict[str, str]] = None
 
 
@@ -96,6 +92,14 @@ class CustomFunctionIterator(PatternIterator):
 
     def __next__(self) -> float:
         self.tick_count += 1
+
+        # Check if we need to reset based on reset_interval
+        if self.config.reset_interval > 0 and self.tick_count == self.config.reset_interval:
+            # Reset the generator and tick count
+            function_name = getattr(self.config, 'custom_function', None)
+            self.generator = CUSTOM_FUNCTIONS[function_name](self.config)
+            self.tick_count = 0
+
         try:
             value = next(self.generator)
             return value
